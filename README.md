@@ -1,30 +1,22 @@
-# Audio to SRT Converter
+# Audio Processing & Dictation Tools
+
+This repository contains tools for processing audio files, generating subtitles, and practicing dictation.
+
+## Components
+
+### 1. Audio to SRT Converter
 
 A Python tool that automatically detects speech segments in audio files and generates SRT subtitle files with timestamps.
 
-## Features
+#### Features
 
 - Automatically splits audio into speech segments
 - Generates properly formatted SRT subtitle files
 - Customizable detection parameters
 - Works with various audio file formats
+- Can use pre-defined content from a subtitle.txt file
 
-## Requirements
-
-- Python 3.6+
-- auditok library (v0.2.0 or higher)
-
-## Installation
-
-Install the required dependencies:
-
-```sh
-pip install -r requirements.txt
-```
-
-## Usage
-
-### Basic Usage
+#### Usage
 
 ```python
 from audio_to_srt import process_audio
@@ -33,7 +25,7 @@ from audio_to_srt import process_audio
 process_audio("your_audio_file.mp3")
 ```
 
-### Advanced Usage
+#### Advanced Usage
 
 ```python
 process_audio(
@@ -46,15 +38,59 @@ process_audio(
 )
 ```
 
-## Parameters
+### 2. Dictation Helper
 
-- **audio_file**: Path to the input audio file
-- **output_file**: Path for the output SRT file (optional)
-- **min_dur**: Minimum duration (in seconds) for a valid speech segment
-- **max_dur**: Maximum duration (in seconds) for a speech segment
-- **max_silence**: Maximum silence duration (in seconds) within a speech segment
-- **energy_threshold**: Energy level threshold for speech detection
+An interactive GUI application that helps with dictation practice by playing audio segments from an SRT file and allowing the user to navigate between segments.
 
-## Output
+#### Features
 
-The script generates an SRT file with timestamps for each detected speech segment. The actual transcript content is initially set to "xxx" and needs to be filled in manually.
+- Load audio files and corresponding SRT subtitle files
+- Navigate through audio segments (previous, replay, next)
+- Convenient keyboard shortcuts for quick navigation
+- Automatically saves progress between sessions
+- Display subtitle text while playing audio segments
+
+#### Usage
+
+Run the application:
+
+```sh
+python dictation_helper.py
+```
+
+Then:
+1. Select an audio file
+2. Select a corresponding SRT file
+3. Use the buttons or keyboard shortcuts to navigate through segments
+
+#### Keyboard Shortcuts
+
+- **Enter**: Play next segment
+- **Shift+Space**: Replay current segment
+- **Ctrl+Left Arrow**: Play previous segment
+
+## Requirements
+
+- Python 3.6+
+- auditok library
+- pygame
+- PyQt5
+- keyboard
+
+## Installation
+
+Install the required dependencies:
+
+```sh
+pip install -r requirements.txt
+```
+
+## Workflow
+
+1. Use audio_to_srt.py to process an audio file and generate an SRT file with timestamps
+2. Optionally prepare a subtitle.txt file with content for each segment
+3. Use dictation_helper.py to practice listening and dictation with the processed audio
+
+## Progress Tracking
+
+The Dictation Helper automatically saves your progress in dictation_progress.json and will restore your position when you reopen the application.
