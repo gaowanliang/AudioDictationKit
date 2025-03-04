@@ -14,10 +14,34 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QShortcut,
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QKeySequence
 import pygame
 import re
+
+
+# 创建一个热键处理类，用于在线程间安全通信
+class KeyboardHandler(QObject):
+    # 信号可以传递一个来源标识字符串
+    replay_signal = pyqtSignal(str)
+    next_signal = pyqtSignal(str)
+    previous_signal = pyqtSignal(str)
+    hotkey_pause_signal = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+
+    def replay_triggered(self):
+        self.replay_signal.emit("hotkey")  # 使用字符串区分来源
+
+    def next_triggered(self):
+        self.next_signal.emit("hotkey")
+
+    def previous_triggered(self):
+        self.previous_signal.emit("hotkey")
+
+    def hotkey_pause_triggered(self):
+        self.hotkey_pause_signal.emit("hotkey")
 
 
 class DictationHelper(QMainWindow):
@@ -34,6 +58,7 @@ class DictationHelper(QMainWindow):
         self.segments = []
         self.playback_timer = QTimer(self)  # 用于控制播放时长
         self.playback_timer.timeout.connect(self.stop_playback)
+        self.allow_hotkeys_flag = True
 
         # 状态保存相关
         self.progress_data = {}
@@ -45,10 +70,17 @@ class DictationHelper(QMainWindow):
         # 设置UI
         self.init_ui()
 
+        # 创建热键处理器
+        self.keyboard_handler = KeyboardHandler()
+        self.keyboard_handler.replay_signal.connect(self.replay_current)
+        self.keyboard_handler.next_signal.connect(self.play_next)
+        self.keyboard_handler.previous_signal.connect(self.play_previous)
+        self.keyboard_handler.hotkey_pause_signal.connect(self.allow_hotkeys)
+
         # 设置全局热键
-        keyboard.add_hotkey("shift+space", self.replay_current)
-        keyboard.add_hotkey("enter", self.play_next)
-        keyboard.add_hotkey("ctrl+left", self.play_previous)
+        keyboard.add_hotkey("shift+space", self.keyboard_handler.replay_triggered)
+        keyboard.add_hotkey("enter", self.keyboard_handler.next_triggered)
+        keyboard.add_hotkey("ctrl+left", self.keyboard_handler.previous_triggered)
 
     def init_ui(self):
         self.setWindowTitle("Dictation Helper")
@@ -98,18 +130,25 @@ class DictationHelper(QMainWindow):
         control_layout = QHBoxLayout()
 
         self.prev_btn = QPushButton("Previous (Ctrl+←)", self)
-        self.prev_btn.clicked.connect(self.play_previous)
+        self.prev_btn.clicked.connect(lambda: self.play_previous("button"))
         control_layout.addWidget(self.prev_btn)
 
         self.replay_btn = QPushButton("Replay (Shift+Space)", self)
-        self.replay_btn.clicked.connect(self.replay_current)
+        self.replay_btn.clicked.connect(lambda: self.replay_current("button"))
         control_layout.addWidget(self.replay_btn)
 
         self.next_btn = QPushButton("Next (Enter)", self)
-        self.next_btn.clicked.connect(self.play_next)
+        self.next_btn.clicked.connect(lambda: self.play_next("button"))
         control_layout.addWidget(self.next_btn)
 
         main_layout.addLayout(control_layout)
+
+        # 热键暂停按钮
+        another_control_layout = QHBoxLayout()
+        self.hotkey_pause_btn = QPushButton("Toggle Hotkeys", self)
+        self.hotkey_pause_btn.clicked.connect(lambda: self.allow_hotkeys("button"))
+        another_control_layout.addWidget(self.hotkey_pause_btn)
+        main_layout.addLayout(another_control_layout)
 
         # 热键提示
         hotkey_hint = QLabel(
@@ -297,7 +336,10 @@ class DictationHelper(QMainWindow):
         pygame.mixer.music.stop()
         self.playback_timer.stop()
 
-    def play_next(self):
+    def play_next(self, source=None):
+        if source == "hotkey":
+            if not self.allow_hotkeys_flag:
+                return
         if not self.segments or not self.audio_file:
             self.status_label.setText("Please select audio and subtitle files")
             return
@@ -309,7 +351,11 @@ class DictationHelper(QMainWindow):
         else:
             self.status_label.setText("All segments have been played")
 
-    def play_previous(self):
+    def play_previous(self, source=None):
+        if source == "hotkey":
+            if not self.allow_hotkeys_flag:
+                return
+
         if not self.segments or not self.audio_file:
             self.status_label.setText("Please select audio and subtitle files")
             return
@@ -319,11 +365,19 @@ class DictationHelper(QMainWindow):
         else:
             self.status_label.setText("This is the first segment")
 
-    def replay_current(self):
+    def replay_current(self, source=None):
+        if source == "hotkey":
+            if not self.allow_hotkeys_flag:
+                return
+
         if self.current_segment >= 0 and self.segments and self.audio_file:
             self.play_audio_segment(self.current_segment)
         else:
             self.status_label.setText("No segment is currently playing")
+
+    def allow_hotkeys(self, allow):
+        self.allow_hotkeys_flag = not self.allow_hotkeys_flag
+        print("Hotkeys are now ", "enabled" if self.allow_hotkeys_flag else "disabled")
 
     def closeEvent(self, event):
         # 保存当前进度
