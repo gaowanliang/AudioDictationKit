@@ -3,7 +3,7 @@ import sys
 import keyboard
 import json
 import time
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
     QPushButton,
@@ -13,12 +13,10 @@ from PyQt5.QtWidgets import (
     QWidget,
     QFileDialog,
     QProgressBar,
-    QShortcut,
     QMenu,
-    QAction,
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
-from PyQt5.QtGui import QKeySequence
+from PySide6.QtCore import Qt, QTimer, Signal, QObject
+from PySide6.QtGui import QAction
 import pygame
 import re
 
@@ -26,10 +24,10 @@ import re
 # 创建一个热键处理类，用于在线程间安全通信
 class KeyboardHandler(QObject):
     # 信号可以传递一个来源标识字符串
-    replay_signal = pyqtSignal(str)
-    next_signal = pyqtSignal(str)
-    previous_signal = pyqtSignal(str)
-    hotkey_pause_signal = pyqtSignal(str)
+    replay_signal = Signal(str)
+    next_signal = Signal(str)
+    previous_signal = Signal(str)
+    hotkey_pause_signal = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -65,9 +63,10 @@ class DictationHelper(QMainWindow):
 
         # 状态保存相关
         self.progress_data = {}
-        
+
         # 获取基础路径 - 区分打包环境和开发环境
         self.base_path = self.get_base_path()
+        print(f"Base path: {self.base_path}")
         self.progress_file = os.path.join(self.base_path, "dictation_progress.json")
         self.load_progress()
 
@@ -87,14 +86,12 @@ class DictationHelper(QMainWindow):
         keyboard.add_hotkey("ctrl+left", self.keyboard_handler.previous_triggered)
 
     def get_base_path(self):
-        """
-        根据运行环境确定基础路径:
-        - 如果是打包后的环境，使用可执行文件所在目录
-        - 如果是开发环境，使用脚本文件所在目录
-        """
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             # 打包环境 - PyInstaller, cx_Freeze等
             return os.path.dirname(os.path.realpath(sys.executable))
+        elif "__compiled__" in globals():
+            # Nuitka编译环境
+            return os.path.dirname(os.path.realpath(sys.argv[0]))
         else:
             # 开发环境 - 使用当前脚本的路径
             return os.path.dirname(os.path.realpath(__file__))
@@ -169,7 +166,8 @@ class DictationHelper(QMainWindow):
 
         # 热键提示
         hotkey_hint = QLabel(
-            "Hotkeys: Alt+X (Replay), Enter (Next), Ctrl+← (Previous)", self  # 更新热键提示
+            "Hotkeys: Alt+X (Replay), Enter (Next), Ctrl+← (Previous)",
+            self,  # 更新热键提示
         )
         hotkey_hint.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(hotkey_hint)
@@ -178,15 +176,6 @@ class DictationHelper(QMainWindow):
         central_widget = QWidget()
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
-
-        # 设置窗口快捷键 - 修改为Alt+X
-        QShortcut(
-            QKeySequence(Qt.Key_X | Qt.AltModifier), self, self.replay_current
-        )
-        QShortcut(QKeySequence(Qt.Key_Return), self, self.play_next)
-        QShortcut(
-            QKeySequence(Qt.Key_Left | Qt.ControlModifier), self, self.play_previous
-        )
 
     def load_progress(self):
         """从JSON文件加载进度数据"""
@@ -202,20 +191,23 @@ class DictationHelper(QMainWindow):
     def save_progress(self):
         """将当前进度保存到JSON文件"""
         try:
-            data_to_save = {
-                "progress": self.progress_data
-            }
-            
+            data_to_save = {"progress": self.progress_data}
+
             if self.audio_file:
                 file_key = self.get_file_key()
                 if file_key:
+                    current_segment = self.progress_data[file_key].get(
+                        "current_segment", -1
+                    )
+                    if current_segment < self.current_segment and current_segment != -1:
+                        current_segment = self.current_segment
                     self.progress_data[file_key] = {
                         "audio_file": self.audio_file,
                         "srt_file": self.srt_file,
-                        "current_segment": self.current_segment,
-                        "last_accessed": int(time.time())  # 添加最后访问时间
+                        "current_segment": current_segment,
+                        "last_accessed": int(time.time()),  # 添加最后访问时间
                     }
-            
+
             # 保存数据
             with open(self.progress_file, "w", encoding="utf-8") as f:
                 json.dump(data_to_save, f, ensure_ascii=False, indent=2)
@@ -227,15 +219,17 @@ class DictationHelper(QMainWindow):
         if self.audio_file:
             return os.path.basename(self.audio_file)
         return None
-    
+
     def add_recent_file(self, file_path, file_type):
         """添加文件到进度数据中"""
         if not file_path or not os.path.exists(file_path):
             return
-        
+
         # 更新当前文件的最后访问时间
-        file_key = os.path.basename(file_path) if file_type == "audio" else self.get_file_key()
-        
+        file_key = (
+            os.path.basename(file_path) if file_type == "audio" else self.get_file_key()
+        )
+
         if file_type == "audio":
             # 如果是添加音频文件
             self.progress_data[file_key] = self.progress_data.get(file_key, {})
@@ -248,7 +242,7 @@ class DictationHelper(QMainWindow):
             if file_key in self.progress_data:
                 self.progress_data[file_key]["srt_file"] = file_path
                 self.progress_data[file_key]["last_accessed"] = int(time.time())
-            
+
         # 保存进度
         self.save_progress()
 
@@ -257,11 +251,11 @@ class DictationHelper(QMainWindow):
         result = []
         # 根据last_accessed排序进度数据
         sorted_items = sorted(
-            self.progress_data.items(), 
-            key=lambda x: x[1].get("last_accessed", 0), 
-            reverse=True
+            self.progress_data.items(),
+            key=lambda x: x[1].get("last_accessed", 0),
+            reverse=True,
         )
-        
+
         # 获取文件路径
         for _, data in sorted_items:
             file_path = data.get(f"{file_type}_file")
@@ -269,73 +263,92 @@ class DictationHelper(QMainWindow):
                 result.append(file_path)
                 if len(result) >= limit:
                     break
-                    
+
         return result
 
     def show_audio_menu(self):
         """显示音频文件选择菜单，包含最近文件"""
         menu = QMenu(self)
-        
+
         # 添加"浏览..."选项
         browse_action = QAction("Browse...", self)
         browse_action.triggered.connect(self.open_audio_file)
         menu.addAction(browse_action)
-        
+
         # 获取最近的音频文件
         recent_audio_files = self.get_recent_files("audio")
-        
+
         # 如果有最近文件，添加分隔线和最近文件
         if recent_audio_files:
             menu.addSeparator()
             menu.addAction("Recent Audio Files").setEnabled(False)
-            
+
             for file_path in recent_audio_files:
                 action = QAction(os.path.basename(file_path), self)
                 action.setData(file_path)
-                action.triggered.connect(lambda checked, path=file_path: self.open_recent_audio(path))
+                action.triggered.connect(
+                    lambda checked, path=file_path: self.open_recent_audio(path)
+                )
                 menu.addAction(action)
-        
+
         # 显示菜单
-        menu.exec_(self.audio_btn.mapToGlobal(self.audio_btn.rect().bottomLeft()))
+        menu.exec(self.audio_btn.mapToGlobal(self.audio_btn.rect().bottomLeft()))
 
     def show_srt_menu(self):
         """显示字幕文件选择菜单，包含最近文件"""
         menu = QMenu(self)
-        
+
         # 添加"浏览..."选项
         browse_action = QAction("Browse...", self)
         browse_action.triggered.connect(self.open_srt_file)
         menu.addAction(browse_action)
-        
+
         # 获取最近的字幕文件
         recent_srt_files = self.get_recent_files("srt")
-        
+
         # 如果有最近文件，添加分隔线和最近文件
         if recent_srt_files:
             menu.addSeparator()
             menu.addAction("Recent Subtitle Files").setEnabled(False)
-            
+
             for file_path in recent_srt_files:
                 action = QAction(os.path.basename(file_path), self)
                 action.setData(file_path)
-                action.triggered.connect(lambda checked, path=file_path: self.open_recent_srt(path))
+                action.triggered.connect(
+                    lambda checked, path=file_path: self.open_recent_srt(path)
+                )
                 menu.addAction(action)
-        
+
         # 显示菜单
-        menu.exec_(self.srt_btn.mapToGlobal(self.srt_btn.rect().bottomLeft()))
+        menu.exec(self.srt_btn.mapToGlobal(self.srt_btn.rect().bottomLeft()))
+
+    def open_srt_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Subtitle File", "", "Subtitle Files (*.srt)"
+        )
+        if file_path:
+            self.srt_file = file_path
+            self.status_label.setText(
+                f"Subtitle file selected: {os.path.basename(file_path)}"
+            )
+            self.parse_srt()
+
+            # 如果音频文件已加载，尝试恢复进度
+            if self.audio_file:
+                self.restore_progress()
 
     def open_recent_audio(self, file_path):
         """打开最近使用的音频文件"""
         self.audio_file = file_path
         self.status_label.setText(f"Audio file selected: {os.path.basename(file_path)}")
         pygame.mixer.music.load(self.audio_file)
-        
+
         # 添加到最近文件列表
         self.add_recent_file(file_path, "audio")
-        
+
         # 自动寻找匹配的字幕文件
         self.find_matching_subtitle()
-        
+
         # 尝试恢复之前的进度
         self.restore_progress()
 
@@ -343,30 +356,34 @@ class DictationHelper(QMainWindow):
         """自动寻找匹配的字幕文件"""
         if not self.audio_file:
             return
-        
+
         # 先检查是否在进度数据中有记录
         file_key = self.get_file_key()
         if file_key and file_key in self.progress_data:
             saved_srt = self.progress_data[file_key].get("srt_file")
             if saved_srt and os.path.exists(saved_srt):
                 self.srt_file = saved_srt
-                self.status_label.setText(f"Found saved subtitle: {os.path.basename(saved_srt)}")
+                self.status_label.setText(
+                    f"Found saved subtitle: {os.path.basename(saved_srt)}"
+                )
                 self.parse_srt()
                 return
-        
+
         # 如果进度数据中没有，则寻找同名的SRT文件
         audio_dir = os.path.dirname(self.audio_file)
         audio_name = os.path.splitext(os.path.basename(self.audio_file))[0]
-        
+
         # 尝试在相同目录下找同名.srt文件
         potential_srt = os.path.join(audio_dir, audio_name + ".srt")
         if os.path.exists(potential_srt):
             self.srt_file = potential_srt
-            self.status_label.setText(f"Auto-loaded subtitle: {os.path.basename(potential_srt)}")
+            self.status_label.setText(
+                f"Auto-loaded subtitle: {os.path.basename(potential_srt)}"
+            )
             self.add_recent_file(potential_srt, "srt")
             self.parse_srt()
             return
-        
+
         # 尝试在相同目录下找包含音频文件名的.srt文件
         for file in os.listdir(audio_dir):
             if file.endswith(".srt") and audio_name.lower() in file.lower():
@@ -376,9 +393,9 @@ class DictationHelper(QMainWindow):
                 self.add_recent_file(potential_srt, "srt")
                 self.parse_srt()
                 return
-        
+
         self.status_label.setText("No matching subtitle found. Please select manually.")
-    
+
     def restore_progress(self):
         """恢复之前保存的进度"""
         file_key = self.get_file_key()
@@ -386,8 +403,10 @@ class DictationHelper(QMainWindow):
             saved_data = self.progress_data[file_key]
 
             # 检查SRT文件是否匹配或需要加载
-            if saved_data.get("srt_file") and self.srt_file != saved_data["srt_file"] and os.path.exists(
-                saved_data["srt_file"]
+            if (
+                saved_data.get("srt_file")
+                and self.srt_file != saved_data["srt_file"]
+                and os.path.exists(saved_data["srt_file"])
             ):
                 self.srt_file = saved_data["srt_file"]
                 self.parse_srt()
@@ -403,7 +422,7 @@ class DictationHelper(QMainWindow):
                     f"Progress restored - segment {saved_segment + 1}/{len(self.segments)}"
                 )
                 QTimer.singleShot(500, self.play_next)  # 延迟500ms后播放下一段
-            
+
             # 更新最后访问时间
             saved_data["last_accessed"] = int(time.time())
             self.save_progress()
@@ -431,13 +450,15 @@ class DictationHelper(QMainWindow):
     def open_recent_srt(self, file_path):
         """打开最近使用的字幕文件"""
         self.srt_file = file_path
-        self.status_label.setText(f"Subtitle file selected: {os.path.basename(file_path)}")
-        
+        self.status_label.setText(
+            f"Subtitle file selected: {os.path.basename(file_path)}"
+        )
+
         # 添加到最近文件列表
         self.add_recent_file(file_path, "srt")
-        
+
         self.parse_srt()
-        
+
         if self.audio_file:
             self.status_label.setText("Ready to start dictation, click 'Next' to begin")
             self.restore_progress()
@@ -573,4 +594,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = DictationHelper()
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

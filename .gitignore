@@ -4,3 +4,7 @@
 *.json
 /build
 /dist
+/dictation_helper.build
+/dictation_helper.dist
+/dictation_helper.onefile-build
+*.exe
