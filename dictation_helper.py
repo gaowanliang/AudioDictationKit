@@ -83,7 +83,7 @@ class DictationHelper(QMainWindow):
         # 设置全局热键 - 修改重播热键为alt+x
         keyboard.add_hotkey("alt+x", self.keyboard_handler.replay_triggered)
         keyboard.add_hotkey("enter", self.keyboard_handler.next_triggered)
-        keyboard.add_hotkey("ctrl+left", self.keyboard_handler.previous_triggered)
+        keyboard.add_hotkey("alt+left", self.keyboard_handler.previous_triggered)
 
     def get_base_path(self):
         if getattr(sys, "frozen", False):
@@ -143,7 +143,7 @@ class DictationHelper(QMainWindow):
         # 控制按钮区域
         control_layout = QHBoxLayout()
 
-        self.prev_btn = QPushButton("Previous (Ctrl+←)", self)
+        self.prev_btn = QPushButton("Previous (Alt+←)", self)
         self.prev_btn.clicked.connect(lambda: self.play_previous("button"))
         control_layout.addWidget(self.prev_btn)
 
@@ -166,7 +166,7 @@ class DictationHelper(QMainWindow):
 
         # 热键提示
         hotkey_hint = QLabel(
-            "Hotkeys: Alt+X (Replay), Enter (Next), Ctrl+← (Previous)",
+            "Hotkeys: Alt+X (Replay), Enter (Next), Alt+← (Previous)",
             self,  # 更新热键提示
         )
         hotkey_hint.setAlignment(Qt.AlignCenter)
