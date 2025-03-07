@@ -8,3 +8,6 @@
 /dictation_helper.dist
 /dictation_helper.onefile-build
 *.exe
+/venv
+*.zip
+*.7z

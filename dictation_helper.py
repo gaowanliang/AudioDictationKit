@@ -199,7 +199,7 @@ class DictationHelper(QMainWindow):
                     current_segment = self.progress_data[file_key].get(
                         "current_segment", -1
                     )
-                    if current_segment < self.current_segment and current_segment != -1:
+                    if current_segment < self.current_segment:
                         current_segment = self.current_segment
                     self.progress_data[file_key] = {
                         "audio_file": self.audio_file,
