@@ -58,8 +58,8 @@ def process_audio(
     output_file=None,
     min_dur=0.5,
     max_dur=10,
-    max_silence=0.3,
-    energy_threshold=10,
+    max_silence=0.5,
+    energy_threshold=35,
 ):
     # Determine output file path
     if output_file is None:
@@ -97,5 +97,5 @@ def process_audio(
 
 if __name__ == "__main__":
     # Execute with default parameters
-    audio_file = "Section 4.mp3"  # Replace with your audio file path
+    audio_file = r"Section 3.mp3"  # Replace with your audio file path
     process_audio(audio_file)
