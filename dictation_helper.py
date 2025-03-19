@@ -84,6 +84,7 @@ class DictationHelper(QMainWindow):
         keyboard.add_hotkey("alt+x", self.keyboard_handler.replay_triggered)
         keyboard.add_hotkey("enter", self.keyboard_handler.next_triggered)
         keyboard.add_hotkey("alt+left", self.keyboard_handler.previous_triggered)
+        keyboard.add_hotkey("alt+n", self.keyboard_handler.hotkey_pause_triggered)
 
     def get_base_path(self):
         if getattr(sys, "frozen", False):
@@ -327,6 +328,9 @@ class DictationHelper(QMainWindow):
             self, "Select Subtitle File", "", "Subtitle Files (*.srt)"
         )
         if file_path:
+            # 重置播放状态
+            self.reset_playback_state()
+
             self.srt_file = file_path
             self.status_label.setText(
                 f"Subtitle file selected: {os.path.basename(file_path)}"
@@ -339,6 +343,9 @@ class DictationHelper(QMainWindow):
 
     def open_recent_audio(self, file_path):
         """打开最近使用的音频文件"""
+        # 重置播放状态
+        self.reset_playback_state()
+
         self.audio_file = file_path
         self.status_label.setText(f"Audio file selected: {os.path.basename(file_path)}")
         pygame.mixer.music.load(self.audio_file)
@@ -359,6 +366,7 @@ class DictationHelper(QMainWindow):
 
         # 先检查是否在进度数据中有记录
         file_key = self.get_file_key()
+        print(file_key, self.audio_file, self.srt_file)
         if file_key and file_key in self.progress_data:
             saved_srt = self.progress_data[file_key].get("srt_file")
             if saved_srt and os.path.exists(saved_srt):
@@ -366,6 +374,7 @@ class DictationHelper(QMainWindow):
                 self.status_label.setText(
                     f"Found saved subtitle: {os.path.basename(saved_srt)}"
                 )
+                print("Found saved subtitle:", saved_srt)
                 self.parse_srt()
                 return
 
@@ -380,6 +389,7 @@ class DictationHelper(QMainWindow):
             self.status_label.setText(
                 f"Auto-loaded subtitle: {os.path.basename(potential_srt)}"
             )
+            print("Auto-loaded subtitle:", potential_srt)
             self.add_recent_file(potential_srt, "srt")
             self.parse_srt()
             return
@@ -390,8 +400,10 @@ class DictationHelper(QMainWindow):
                 potential_srt = os.path.join(audio_dir, file)
                 self.srt_file = potential_srt
                 self.status_label.setText(f"Found similar subtitle: {file}")
+
                 self.add_recent_file(potential_srt, "srt")
                 self.parse_srt()
+                print("Found saved subtitle:", potential_srt)
                 return
 
         self.status_label.setText("No matching subtitle found. Please select manually.")
@@ -432,6 +444,9 @@ class DictationHelper(QMainWindow):
             self, "Select Audio File", "", "Audio Files (*.mp3 *.wav *.ogg)"
         )
         if file_path:
+            # 重置播放状态
+            self.reset_playback_state()
+
             self.audio_file = file_path
             self.status_label.setText(
                 f"Audio file selected: {os.path.basename(file_path)}"
@@ -449,6 +464,9 @@ class DictationHelper(QMainWindow):
 
     def open_recent_srt(self, file_path):
         """打开最近使用的字幕文件"""
+        # 重置播放状态
+        self.reset_playback_state()
+
         self.srt_file = file_path
         self.status_label.setText(
             f"Subtitle file selected: {os.path.basename(file_path)}"
@@ -578,6 +596,22 @@ class DictationHelper(QMainWindow):
     def allow_hotkeys(self, allow):
         self.allow_hotkeys_flag = not self.allow_hotkeys_flag
         print("Hotkeys are now ", "enabled" if self.allow_hotkeys_flag else "disabled")
+
+    def reset_playback_state(self):
+        """重置播放状态"""
+        # 停止当前播放和计时器
+        pygame.mixer.music.stop()
+        self.playback_timer.stop()
+
+        # 重置状态变量
+        self.current_segment = -1
+        self.srt_file = None
+        self.segments = []
+
+        # 重置UI
+        self.progress_bar.setValue(0)
+        self.progress_label.setText(f"0/{len(self.segments)}")
+        self.content_label.setText("")
 
     def closeEvent(self, event):
         # 保存当前进度
